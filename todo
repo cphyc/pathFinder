@@ -1,0 +1,7 @@
+== Fichier principal :
+* Utiliser une seule ouverture d'image
+* Gérer les paramètres
+* Vérifier les paramètres
+* Affichage en temps réel de la trajectoire
+* Gérer les points d'arrets, les ancres contraintes par un vecteur
+* Vérifier qu'on ne sort pas du terrain
