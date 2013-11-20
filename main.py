@@ -1,81 +1,84 @@
-from PIL import Image, ImageDraw
+#!/bin/env python2
+# -*- coding: utf-8 -*-
+
 import pygame as pg
-import matplotlib.pyplot as plt
 import numpy as np
-import scipy.interpolate
-def make_bezier(xys):
-    # xys should be a sequence of 2-tuples (Bezier control points)
-    n = len(xys)
-    combinations = pascal_row(n-1)
-    def bezier(ts):
-        # This uses the generalized formula for bezier curves
-        # http://en.wikipedia.org/wiki/B%C3%A9zier_curve#Generalization
-        result = []
-        for t in ts:
-            tpowers = (t**i for i in range(n))
-            upowers = reversed([(1-t)**i for i in range(n)])
-            coefs = [c*a*b for c, a, b in zip(combinations, tpowers, upowers)]
-            result.append(
-                tuple(sum([coef*p for coef, p in zip(coefs, ps)]) for ps in zip(*xys)))
-        return result
-    return bezier
 
-def quad_bezier(ptlist, t):
-    assert len(ptlist) == 4
-    p1 = ptlist[0]
-    p2 = ptlist[1]
-    p3 = ptlist[2]
-    p4 = ptlist[3]
-    print p1, p2, p3, p4
-    Px = (1-t)**3*p1[0] + 3*(1-t)**2*t*p2[0] 
-    + 3*(1-t)*t**2*p3[0] + t**3*p4[0]
-    Py = (1-t)**3*p1[1] + 3*(1-t)**2*t*p2[1]
-    + 3*(1-t)*t**2*p3[1] + t**3*p4[1]
-    return [Px, Py]
+# Save the stack_size last maps
+stack_size = 15
 
-def pascal_row(n):
-    # This returns the nth row of Pascal's Triangle
-    result = [1]
-    x, numerator = 1, n
-    for denominator in range(1, n//2+1):
-        # print(numerator,denominator,x)
-        x *= numerator
-        x /= denominator
-        result.append(x)
-        numerator -= 1
-    if n&1 == 0:
-        # n is even
-        result.extend(reversed(result[:-1]))
-    else:
-        result.extend(reversed(result)) 
-    return result
+def plot_bez(map, Px, Py):
+    ''' Plot the bezier defined by Px, Py '''
+    assert Px.size == Py.size
+    pos = []
+    for i in range(0, Px.size - 1):
+        pos += [(Px[i], Py[i])]
+    pg.draw.lines(map, (255,0,0), False, pos)
+
+def plot_line(map, x, y):
+    ''' Draw a line between the 2 last points of x and y '''
+    pg.draw.line(map, 
+                 (0,255,0),
+                 (x[-2], y[-2]),(x[-1],y[-1]))
+
+def redraw(map, x, y, map_init):
+    ''' Redraws from scratch '''
+    n = [0]
+    map = map_init
+    for i in range(0, x.size):
+        n[0] += 1
+        draw_once(map, x[:i], y[:i], n)
+
+
+def draw_once(map, x, y, nval):
+    ''' Analyses x and y to decide whether or not to draw sthg '''
+    if x.size > 1:
+        plot_line(map, x, y)
+        if n[0] == 4:
+            Px = a * x[-4] + b * x[-3] + c * x[-2] + d * x[-1]
+            Py = a * y[-4] + b * y[-3] + c * y[-2] + d * y[-1]
+            plot_bez(map, Px, Py)
+            n[0] = 1
 
 if __name__ == '__main__':
     screen = pg.display.set_mode((877, 620))
     map = pg.image.load("map_little.png").convert()
+    map_init = pg.Surface.copy(map)
     screen.blit(map, (0, 0))
     pg.display.flip()
     running = 1
 
     x = np.array([])
     y = np.array([])
-    map = plt.imread("map_little.png")
-    plt.imshow(map)
+    
+    nt = np.linspace(0, 1, 100)
+    # Interpolation manuelle avec poignée de controle
+    a = (1-nt)**3
+    b = 3*(1-nt)**2*nt
+    c = 3*(1-nt)*nt**2
+    d = nt**3
+    
+    # Compte le nombre de points depuis le dernier tracé de bezier
+    n = [0]
+    
     while running:
         event = pg.event.poll()
         if event.type == pg.QUIT:
             running = 0
         elif event.type == pg.MOUSEBUTTONUP:
-            x = np.append(x, event.pos[0])
-            y = np.append(y, event.pos[1])
-
-    nt = np.linspace(0, 1, 1000)
-    t = np.zeros(x.shape)
-    t[1:] = np.sqrt((x[1:] - x[:-1])**2 + (y[1:] - y[:-1])**2)
-    t = np.cumsum(t)
-    t /= t[-1]
-    x2 = scipy.interpolate.spline(t, x, nt)
-    y2 = scipy.interpolate.spline(t, y, nt)
-    plt.plot(x,y)
-    plt.plot(x2, y2)
-    plt.show()
+            if event.button == 1:
+                # Left button clicked, we draw
+                n[0]+=1
+                x = np.append(x, event.pos[0])
+                y = np.append(y, event.pos[1])
+                draw_once(map, x, y, n)
+                screen.blit(map, (0, 0))
+                pg.display.flip()
+            elif event.button == 3:
+                # Right button clicked, we delete the last pt of x and y
+                x = x[:-1]
+                y = y[:-1]
+                # We redraw everything from start
+                redraw(map, x , y, map_init)
+                screen.blit(map, (0, 0))
+                pg.display.flip()
